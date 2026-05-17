@@ -1,0 +1,2949 @@
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: #0a0a0a;
+  color: var(--gray-12);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+.radix-themes {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ───── discover: loader → grid transition ─────
+ * While the AI thinks, a centred glowing equalizer occupies the page.
+ * On data arrival the loader bursts outward (scale up + blur + fade) and
+ * the result grid mounts behind it, with each card fading + sliding up
+ * on a staggered delay so the page settles into a wave instead of a flash.
+ *
+ * The loader's three states are driven by data-leaving on the wrapper
+ * (set by the page's loaderState reducer). */
+
+.discover-loader {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-height: 360px;
+  padding: 60px 20px;
+  animation: discoverLoaderIn 320ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+.discover-loader[data-leaving] {
+  animation: discoverLoaderBurst 320ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+
+@keyframes discoverLoaderIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes discoverLoaderBurst {
+  to {
+    opacity: 0;
+    transform: scale(1.55);
+    filter: blur(18px);
+  }
+}
+
+/* Soft pulsing halo behind the bars. Sits as a separate layer (not a
+ * pseudo-element) so its scale animation can run independently of the
+ * loader-burst exit transform. */
+.discover-loader-halo {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    var(--accent-9) 0%,
+    transparent 65%
+  );
+  opacity: 0.25;
+  filter: blur(22px);
+  pointer-events: none;
+  animation: discoverHaloPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes discoverHaloPulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.18; }
+  50%      { transform: scale(1.08); opacity: 0.42; }
+}
+
+.discover-loader-eq {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 140px;
+  z-index: 1;
+}
+
+.discover-loader-eq span {
+  display: block;
+  width: 14px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(
+    to top,
+    var(--accent-11) 0%,
+    var(--accent-9) 55%,
+    var(--accent-7) 100%
+  );
+  box-shadow:
+    0 0 12px var(--accent-9),
+    0 0 28px rgba(46, 160, 67, 0.55);
+  animation: discoverBarPulse 1100ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Hand-picked, non-symmetric delays so the bars don't lock into a single
+ * travelling wave. Reads as nine independent voices instead of one sweep. */
+.discover-loader-eq span:nth-child(1) { animation-delay:    0ms; }
+.discover-loader-eq span:nth-child(2) { animation-delay:  140ms; }
+.discover-loader-eq span:nth-child(3) { animation-delay:  260ms; }
+.discover-loader-eq span:nth-child(4) { animation-delay:  410ms; }
+.discover-loader-eq span:nth-child(5) { animation-delay:  330ms; }
+.discover-loader-eq span:nth-child(6) { animation-delay:  500ms; }
+.discover-loader-eq span:nth-child(7) { animation-delay:  240ms; }
+.discover-loader-eq span:nth-child(8) { animation-delay:  120ms; }
+.discover-loader-eq span:nth-child(9) { animation-delay:   60ms; }
+
+@keyframes discoverBarPulse {
+  0%, 100% { height: 28px; opacity: 0.6; }
+  50%      { height: 130px; opacity: 1; }
+}
+
+.discover-loader-text {
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.02em;
+}
+
+/* Result grid: each card fades + slides up on a per-card delay. The
+ * --card-index is set by the page from the iteration index. The first
+ * card lands ~80ms after mount, then each follows ~70ms behind. */
+@media (prefers-reduced-motion: no-preference) {
+  .discover-card-stagger {
+    animation: discoverCardRise 540ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+    animation-delay: calc(80ms + var(--card-index, 0) * 70ms);
+  }
+}
+
+@keyframes discoverCardRise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discover-loader,
+  .discover-loader[data-leaving],
+  .discover-loader-halo,
+  .discover-loader-eq span {
+    animation: none;
+  }
+}
+
+/* ───── discover: throttle + error cards ─────
+ * Polished cards that replace the previous naked-red-text errors. The
+ * throttle card surrounds a live-ticking second counter with a circular
+ * progress ring that drains over the wait. The number itself replays a
+ * tiny pop-in animation each second (driven by React key={seconds}). */
+
+.discover-throttle-card,
+.discover-error-card {
+  align-self: center;
+  width: min(100%, 460px);
+  background: color-mix(in srgb, var(--gray-2) 96%, transparent);
+  border: 1px solid var(--gray-4);
+  animation: discoverNoticeIn 380ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+@keyframes discoverNoticeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.discover-throttle-card {
+  /* Subtle pulsing green halo so the card feels alive, not stuck. */
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-9) 20%, transparent),
+    0 12px 30px -12px rgba(46, 160, 67, 0.25);
+  animation:
+    discoverNoticeIn 380ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards,
+    discoverThrottleGlow 3.6s ease-in-out infinite;
+}
+
+@keyframes discoverThrottleGlow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--accent-9) 18%, transparent),
+      0 12px 28px -12px rgba(46, 160, 67, 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--accent-9) 35%, transparent),
+      0 16px 40px -10px rgba(46, 160, 67, 0.4);
+  }
+}
+
+.discover-throttle-ring {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.discover-throttle-ring svg {
+  position: absolute;
+  inset: 0;
+}
+
+.discover-throttle-num-wrap {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Fixed box so re-mounting the digit doesn't shift surrounding
+   * elements as the number's width changes (1 → 12). Wide enough now
+   * for the MM:SS layout used past the one-minute mark. */
+  width: 120px;
+  height: 120px;
+}
+
+.discover-throttle-num {
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent-10);
+  text-shadow: 0 0 24px rgba(46, 160, 67, 0.35);
+  line-height: 1;
+  display: inline-block;
+  /* tabular-nums keeps each digit cell the same width as it ticks down,
+   * so MM:SS doesn't wobble side to side as 0s narrow to 9s widen. */
+  font-variant-numeric: tabular-nums;
+  /* React re-mounts this span every second via key={seconds}; this
+   * keyframe replays each time, producing the tiny pop on every tick. */
+  animation: discoverThrottleTick 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* MM:SS is 5 characters (e.g. "29:43") — drop the size a notch so it
+ * still has air around it inside the ring. */
+.discover-throttle-num-wrap[data-wide] .discover-throttle-num {
+  font-size: 34px;
+  letter-spacing: -0.03em;
+}
+
+@keyframes discoverThrottleTick {
+  0% {
+    opacity: 0;
+    transform: scale(1.35);
+    filter: blur(2px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.96);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+.discover-error-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--red-9) 15%, transparent);
+  color: var(--red-10);
+  border: 1px solid color-mix(in srgb, var(--red-9) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discover-throttle-card,
+  .discover-error-card,
+  .discover-throttle-num {
+    animation: none;
+  }
+}
+
+/* ───── stats: recent-search rows ─────
+ * Each row on /stats fires /mood?q=<mood> when tapped (the mood page reads
+ * the query and auto-runs the search). Two destructive paths: click the ×,
+ * or swipe right past 40% width. The shell wraps both: a relative outer
+ * with a red "trail" pinned beneath, and the row itself layered on top
+ * translating in response to the swipe.
+ *
+ * Entrance: the parent .stats-recent-card fades in first; the rows then
+ * slide up one by one, staggered via --row-index set by the page. Both
+ * use the same easing curve so the perceived motion is one continuous
+ * settle rather than two phases. */
+
+.stats-recent-card {
+  animation: statsCardFadeIn 540ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+@keyframes statsCardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stats-recent-card {
+    animation: none;
+  }
+}
+
+.stats-recent-row-shell {
+  position: relative;
+  border-radius: 8px;
+  /* Hide the trail when the row's transform pushes it past the right edge.
+   * Without overflow:hidden, the trail icon would leak outside the card. */
+  overflow: hidden;
+  /* The shell collapses (height + opacity) on commit so the rows below
+   * slide up into place rather than leaving a gap. */
+  transition:
+    height 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms ease;
+}
+
+.stats-recent-row-shell[data-committing] {
+  /* Tall enough to cover the row during the slide-out, then drops to 0
+   * once the slide finishes (handled by the inline transition; the height
+   * collapse runs slightly slower so the row visibly leaves before the
+   * row below moves up to fill the slot). */
+  height: 0;
+  margin-top: -8px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stats-recent-row-trail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 16px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--red-9) 80%, transparent);
+  color: white;
+  pointer-events: none;
+}
+
+.stats-recent-row {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-4);
+  border-radius: 8px;
+  background: var(--gray-2);
+  text-decoration: none;
+  color: inherit;
+  position: relative;
+  cursor: pointer;
+  /* Disable native horizontal scroll/selection during a touch drag — the
+   * pointer handlers preventDefault but `touch-action: pan-y` is what
+   * actually keeps mobile browsers from hijacking the gesture for scroll. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The × delete button. Visible always, brightens on hover. Sits in the
+ * row's right-hand control cluster next to the timestamp. */
+.stats-recent-delete {
+  opacity: 0.55;
+  transition: opacity 140ms ease, color 140ms ease;
+}
+
+.stats-recent-row:hover .stats-recent-delete {
+  opacity: 1;
+}
+
+.stats-recent-delete:hover {
+  color: var(--red-11) !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stats-recent-row {
+    /* Wait for the card's fade to settle, then stagger rows ~70ms apart.
+     * `backwards` applies the FROM state immediately so rows don't pop in
+     * at full opacity before their delay starts. */
+    animation: statsRowRise 480ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+    animation-delay: calc(280ms + var(--row-index, 0) * 70ms);
+  }
+}
+
+@keyframes statsRowRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.stats-recent-row::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent-9);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stats-recent-row:hover {
+    transform: translateX(2px);
+    border-color: var(--accent-7);
+    background: var(--gray-3);
+  }
+  .stats-recent-row:hover::before {
+    opacity: 1;
+  }
+  .stats-recent-row:active {
+    transform: translateX(0);
+  }
+}
+
+.stats-recent-row:focus-visible {
+  outline: 2px solid var(--accent-9);
+  outline-offset: 2px;
+}
+
+/* ───── tactile button presses ───── */
+
+@media (prefers-reduced-motion: no-preference) {
+  .rt-Button,
+  .rt-IconButton {
+    transition:
+      transform 120ms cubic-bezier(0.2, 0, 0.2, 1),
+      box-shadow 120ms cubic-bezier(0.2, 0, 0.2, 1),
+      background-color 120ms ease;
+    will-change: transform;
+  }
+  .rt-Button:not(:disabled):hover,
+  .rt-IconButton:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  }
+  .rt-Button:not(:disabled):active,
+  .rt-IconButton:not(:disabled):active {
+    transform: translateY(1px) scale(0.97);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25);
+    transition-duration: 60ms;
+  }
+}
+
+/* ───── pointer cursor on all interactive controls ───── */
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+.rt-Button:not(:disabled),
+.rt-IconButton:not(:disabled),
+summary,
+label[for],
+input[type="submit"]:not(:disabled),
+input[type="button"]:not(:disabled),
+select:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+.rt-Button:disabled,
+.rt-IconButton:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* ───── fade-in / slide-up entrance animations ───── */
+
+@media (prefers-reduced-motion: no-preference) {
+  .page-fade-in {
+    animation: pageFadeUp 360ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+
+  .stagger-item {
+    animation: pageFadeUp 480ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+    animation-delay: calc(var(--card-index, 0) * 35ms);
+  }
+
+  .app-header {
+    animation: appHeaderFadeIn 380ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+}
+
+@keyframes pageFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appHeaderFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ───── running green border (used on .mood-input + small accents) ─────
+ * Conic-gradient on a pseudo-element with a hollow mask so only a thin
+ * ring is visible. The ring sweeps by animating --ring-angle. */
+
+@property --ring-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.running-ring {
+  position: relative;
+  isolation: isolate;
+}
+
+.running-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--ring-angle),
+    transparent 0deg,
+    transparent 200deg,
+    var(--accent-9) 270deg,
+    var(--accent-11) 305deg,
+    var(--accent-9) 340deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .running-ring::before {
+    animation: ringSpin 3.5s linear infinite;
+  }
+}
+
+@keyframes ringSpin {
+  to {
+    --ring-angle: 360deg;
+  }
+}
+
+/* ───── mood input ─────
+ * Hero textarea on /mood. The running green border sweeps continuously;
+ * when focused we thicken the ring slightly so the "active" state reads
+ * even with the same animation.
+ *
+ * The wrap is sized explicitly (height: 220px) and the textarea is
+ * absolutely positioned inside it, so we can morph the wrap's geometry
+ * (width / height / border-radius) into a 96px circle while the textarea
+ * fades out — the "input becomes the loader" transition. On result, the
+ * wrap morphs back, the textarea fades in, and the results grid below
+ * starts its staggered slide-up. */
+
+/* Layout-stable host for the morph. The wrap inside collapses to a circle
+ * while loading; without this stage the form's height would drop ~88px on
+ * morph-in and grow back on morph-out, jiggling everything below (button
+ * row, error text, result grid). With the stage at a fixed 220px tall,
+ * the wrap's geometry change happens INSIDE a constant footprint. */
+.mood-input-stage {
+  position: relative;
+  width: 100%;
+  height: 220px;
+}
+
+.mood-input-wrap {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-5);
+  background: var(--gray-2);
+  /* Visual morph via clip-path — the wrap's actual layout box stays at the
+   * full stage size (100% × 220px) the entire time; only the visible region
+   * shrinks to a 132px circle in the centre. No box-dimension transitions
+   * means there is literally no width or height value being interpolated
+   * by the browser, so the previous "millisecond width flash" is impossible
+   * by construction.
+   *
+   * The clip-path uses round-corners on a single inset() shape — modern
+   * browsers interpolate inset() <-> inset() smoothly. Easing is the same
+   * Apple-style ease-out we use for fades, so the morph + fades feel like
+   * one continuous motion. */
+  clip-path: inset(0 0 round var(--radius-5));
+  transition: clip-path 820ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: clip-path;
+}
+
+.mood-input-wrap:focus-within::before {
+  padding: 3px;
+}
+
+.mood-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 28px 32px;
+  font-size: 28px;
+  line-height: 1.4;
+  color: var(--gray-12);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-5);
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  /* Same easing curve as the wrap morph so the textarea fade and the
+   * geometry collapse share a single perceived motion. */
+  transition: opacity 520ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.mood-input::placeholder {
+  color: var(--gray-9);
+}
+
+/* Shrink the textarea typography on mobile so the long placeholder
+ * (e.g. the Ukrainian translation of "Rainy Sunday morning…") fits
+ * within the fixed 220px stage without producing an internal scrollbar. */
+@media (max-width: 700px) {
+  .mood-input {
+    padding: 20px 22px;
+    font-size: 18px;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 480px) {
+  .mood-input {
+    padding: 18px 20px;
+    font-size: 17px;
+  }
+}
+
+/* ─── morph: input → circular loader ───
+ * The visible region clips down to a 132px circle centred in the stage.
+ * 44px top + bottom of the 220px stage = 132px tall window; calc(50% - 66px)
+ * left/right inset matches that horizontally. round 50% gives the corners
+ * full curvature, producing a clean circle. */
+.mood-input-wrap[data-loading="true"] {
+  clip-path: inset(44px calc(50% - 66px) round 50%);
+}
+
+.mood-input-wrap[data-loading="true"] .mood-input {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.running-ring::before {
+  transition: opacity 520ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.mood-input-wrap[data-loading="true"]::before {
+  opacity: 0;
+}
+
+/* ─── EQ-wave loader inside the morph circle ───
+ * Five vertical bars bouncing on staggered delays — reads as an audio
+ * visualizer rather than a generic spinner, fitting the "AI listening for
+ * music" metaphor. The bars are absolutely positioned at the centre of the
+ * wrap and only fade in once the morph is well underway (200ms delay) so
+ * they don't overlap the still-visible textarea text on the way down. */
+.mood-loader-eq {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 360ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Bars don't appear until the morph is well past the halfway mark — that
+ * way the textarea has visibly faded and the wrap is on its way to a
+ * circle when the wave shows up, so the layered transitions read as one
+ * continuous motion rather than competing things. */
+.mood-input-wrap[data-loading="true"] .mood-loader-eq {
+  opacity: 1;
+  transition-delay: 480ms;
+}
+
+.mood-loader-eq span {
+  display: block;
+  width: 10px;
+  height: 26px;
+  border-radius: 5px;
+  background: linear-gradient(
+    to top,
+    var(--accent-11),
+    var(--accent-9) 60%,
+    var(--accent-7)
+  );
+  box-shadow:
+    0 0 10px var(--accent-9),
+    0 0 24px rgba(46, 160, 67, 0.6);
+}
+
+/* Each bar gets its own duration + delay so the bars drift in and out of
+ * phase rather than locking into a single repeating wave shape. Picked
+ * unrelated periods (no nice common multiple) so the visual never settles
+ * into a clean cycle. */
+@media (prefers-reduced-motion: no-preference) {
+  .mood-input-wrap[data-loading="true"] .mood-loader-eq span {
+    animation-name: moodEqBar;
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+  }
+  .mood-loader-eq span:nth-child(1) {
+    animation-duration: 820ms;
+    animation-delay: 0ms;
+  }
+  .mood-loader-eq span:nth-child(2) {
+    animation-duration: 1180ms;
+    animation-delay: -340ms;
+  }
+  .mood-loader-eq span:nth-child(3) {
+    animation-duration: 940ms;
+    animation-delay: -120ms;
+  }
+  .mood-loader-eq span:nth-child(4) {
+    animation-duration: 1310ms;
+    animation-delay: -560ms;
+  }
+  .mood-loader-eq span:nth-child(5) {
+    animation-duration: 870ms;
+    animation-delay: -210ms;
+  }
+}
+
+@keyframes moodEqBar {
+  0%, 100% { height: 26px; }
+  50%      { height: 90px; }
+}
+
+/* The submit-row (hint + button) hides while loading so the loader is the
+ * single focal point. */
+.mood-actions {
+  transition: opacity 220ms ease;
+}
+
+.mood-actions[data-loading="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ─── voice input ─────────────────────────────────────────────────────
+ * Pill-shaped lang code + circular mic, sitting on the left of the
+ * actions row. The mic gets a soft pulsing red halo while recording so
+ * a speaking user can tell at a glance that the recognizer is live. */
+.voice-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-input-lang {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--gray-3);
+  color: var(--gray-11);
+  border: 1px solid var(--gray-5);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.voice-input-lang:hover:not(:disabled) {
+  background: var(--gray-4);
+  color: var(--gray-12);
+  border-color: var(--gray-7);
+}
+
+.voice-input-lang:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-input[data-recording] .voice-input-btn {
+  /* The IconButton's solid red is set via Radix props; the halo here is
+   * the audible-visual cue that recording is live. */
+  box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.6);
+  animation: voiceMicPulse 1400ms ease-in-out infinite;
+}
+
+@keyframes voiceMicPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(229, 72, 77, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-input[data-recording] .voice-input-btn {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.4);
+  }
+}
+
+/* ─── results: section-level fade tied to isLoading ───
+ * Per-card stagger is killed inside the mood results grid — it was
+ * causing each new card to slide up from translateY(20px) on every
+ * search, which read as a jiggle after the cards became stable. With
+ * stable per-slot keys (see TrackCard mounts in /mood/page.tsx) the
+ * cards stay mounted across searches; only their props change. So the
+ * single entrance animation we want is a smooth section-level fade,
+ * driven by data-loading on the wrapping <Flex>. */
+.mood-results-grid .stagger-item {
+  animation: none;
+}
+
+.mood-results-section {
+  transition: opacity 380ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.mood-results-section[data-loading="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ───── track card ─────
+ * Two-element structure: an outer .track-card-wrap (relative-positioned,
+ * carries the visual frame and "playing" border), and an inner .track-card
+ * <button> that owns play-on-click. The heart icon sits absolutely in the
+ * wrap's top-right corner so it can be a separate <button> (HTML rejects
+ * nested buttons). */
+
+.track-card-wrap {
+  position: relative;
+  border-radius: var(--radius-3);
+  background: var(--gray-2);
+  border: 1px solid var(--gray-4);
+  transition:
+    transform 160ms cubic-bezier(0.2, 0, 0.2, 1),
+    box-shadow 160ms cubic-bezier(0.2, 0, 0.2, 1),
+    border-color 160ms ease;
+  /* Browser-native virtualization. content-visibility:auto skips
+   * layout, paint, and rendering for off-screen cards — only the
+   * on-screen ones pay the cost (image decoding, equalizer, hover
+   * transitions, View Transitions root snapshot).
+   * contain-intrinsic-size reserves a placeholder height that matches
+   * the typical card so scrollbar position stays accurate. The
+   * browser unhides automatically when the element approaches the
+   * viewport. No-library substitute for react-window for the
+   * Library's potentially 100s-of-cards grid. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
+}
+
+/* Originating element during a morph (card / footer art / footer
+ * title): paint it as a solid dark rectangle so the View Transitions
+ * snapshot is a uniform dark shape that morphs cleanly into the
+ * modal. Hide all descendants with !important + visibility:hidden so
+ * the rainbow play-hint, info icon, equalizer, etc. don't leak into
+ * the snapshot. */
+.track-card-wrap[data-vt-active],
+.now-playing-art-btn[data-vt-active],
+.now-playing-text-btn[data-vt-active] {
+  z-index: 50;
+  transition: none;
+  will-change: transform, opacity;
+  contain: layout paint;
+  background: rgba(14, 14, 14, 0.92);
+  /* Drop the border entirely — the View Transition would otherwise
+   * interpolate the border between the originator's value and the
+   * dialog's value, which renders as a flickering hairline on the
+   * morphing rectangle. With border:0 on both ends, the morph is a
+   * clean filled rectangle. The 1px size shift at the start is too
+   * small to notice. */
+  border: 0 !important;
+}
+
+.track-card-wrap[data-vt-active] *,
+.now-playing-art-btn[data-vt-active] *,
+.now-playing-text-btn[data-vt-active] * {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .track-card-wrap:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.6);
+    border-color: var(--gray-6);
+  }
+  .track-card-wrap:active {
+    transform: translateY(0) scale(0.985);
+    transition-duration: 80ms;
+  }
+}
+
+.track-card-wrap[data-playing] {
+  border-color: var(--accent-9);
+  box-shadow: 0 0 0 1px var(--accent-9), 0 12px 30px -10px var(--accent-12);
+}
+
+.track-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+/* Info button — bottom-right of the art block, mirror of the heart's
+ * top-right position. Reveal on hover/focus just like the heart. */
+.track-card-info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  opacity: 0;
+  transform: scale(0.92);
+  transition:
+    opacity 160ms ease,
+    transform 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.track-card-wrap:hover .track-card-info,
+.track-card-wrap:focus-within .track-card-info {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Same glassy-pill treatment as the favorite button so the two
+ * top-corner chips read as a matched pair. */
+.track-card-info-btn {
+  background: rgba(10, 10, 10, 0.55) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: var(--gray-11) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.track-card-info-btn:hover:not(:disabled) {
+  background: rgba(15, 15, 15, 0.75) !important;
+  color: var(--gray-12) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+/* Similar-songs button — sits just below the info button at top-left,
+ * forming a vertical pair on the art block. Reveal on hover/focus like
+ * the info button so a resting card stays clean. */
+.track-card-similar {
+  position: absolute;
+  top: 50px;
+  left: 10px;
+  z-index: 2;
+  opacity: 0;
+  transform: scale(0.92);
+  transition:
+    opacity 160ms ease,
+    transform 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.track-card-wrap:hover .track-card-similar,
+.track-card-wrap:focus-within .track-card-similar {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.track-card-favorite {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  /* Hidden until the card is hovered/focus-visible OR the track is already
+   * a favorite (so users can see at a glance which tracks they've saved). */
+  opacity: 0;
+  transform: scale(0.92);
+  transition:
+    opacity 160ms ease,
+    transform 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.track-card-wrap:hover .track-card-favorite,
+.track-card-wrap:focus-within .track-card-favorite,
+.track-card-favorite:has(.favorite-btn[data-active]) {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Pill style for the heart that sits on top of the album art. The default
+ * Radix soft variant is a slightly opaque tinted square — too heavy on the
+ * dark card. We override it with a translucent dark backdrop + thin border
+ * so it reads as a floating chip rather than a button block. */
+.favorite-btn {
+  background: rgba(10, 10, 10, 0.55) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: var(--gray-11) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.favorite-btn:hover:not(:disabled) {
+  background: rgba(15, 15, 15, 0.75) !important;
+  color: var(--gray-12) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.favorite-btn[data-active] {
+  /* Tint the chip in the active accent — color-mix keeps the alpha low
+   * enough that the dark album art still reads through, and the colour
+   * tracks the Theme accentColor (grass for Spotify, purple for Deezer,
+   * orange for SoundCloud). */
+  background: color-mix(in srgb, var(--accent-9) 22%, transparent) !important;
+  border-color: var(--accent-8) !important;
+  color: var(--accent-10) !important;
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent-9) 35%, transparent);
+}
+
+.favorite-btn[data-active]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-9) 32%, transparent) !important;
+  color: var(--accent-11) !important;
+}
+
+/* The square that owns positioning for both the round album art AND the
+ * equalizer ring. We inset the art by 14% so the ring of bars has room to
+ * bloom into the card corners without the round-clip on .track-art chopping
+ * them off. */
+.track-art-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.track-art {
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--gray-3);
+}
+
+.track-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 240ms ease, filter 240ms ease;
+}
+
+/* ─── hover: artwork fades, play-hint pops in ───
+ * Floating play chip centred over the art. Default state: hidden + scaled
+ * down. On wrap hover/focus (and only for playable tracks) the artwork
+ * dims and the chip slides in.
+ *
+ * Refresh: was a 7-color rainbow conic with a spinning border (loud +
+ * cluttered against album art). Now a calm "glass disc" — a translucent
+ * dark fill with a subtle white hairline, an accent-colored soft glow,
+ * and a small Spotify-green play triangle. Quiet on dark covers, still
+ * legible on bright ones. */
+.track-play-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 50% 30%,
+      rgba(255, 255, 255, 0.08) 0%,
+      rgba(0, 0, 0, 0.55) 70%
+    );
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.3) inset;
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  color: #fff;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.85);
+  pointer-events: none;
+  transition:
+    opacity 220ms ease,
+    transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 220ms ease,
+    border-color 220ms ease;
+  isolation: isolate;
+  z-index: 3;
+}
+
+/* SVG centred via absolute positioning rather than flex — this is robust
+ * against any inline-svg quirks (e.g. presentational width/height attrs vs
+ * CSS overrides) that can land the icon a few px off-centre.
+ *
+ * Tinted with the accent color via currentColor — the play/pause SVGs
+ * use `fill="currentColor"`, so setting color here drives them. The
+ * white drop-shadow halo keeps the triangle legible against artwork
+ * that happens to share the accent hue. */
+.track-play-hint svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  color: var(--accent-10);
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+  display: block;
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .track-card-wrap[data-playable]:hover .track-art img,
+  .track-card-wrap[data-playable]:focus-within .track-art img {
+    opacity: 0.22;
+    filter: blur(2px);
+  }
+
+  .track-card-wrap[data-playable]:hover .track-play-hint,
+  .track-card-wrap[data-playable]:focus-within .track-play-hint {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    /* Soft accent glow — subtle outer ring + colored shadow. Replaces
+     * the old spinning rainbow with a still, premium "the music's here"
+     * cue. */
+    box-shadow:
+      0 8px 28px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(0, 0, 0, 0.3) inset,
+      0 0 0 2px var(--accent-a4),
+      0 0 18px var(--accent-a6);
+    border-color: rgba(255, 255, 255, 0.28);
+  }
+
+  /* A tiny press-on-hover bump on the icon. Sells the "this is a button"
+   * affordance without animating the chip itself. */
+  .track-card-wrap[data-playable]:hover .track-play-hint svg,
+  .track-card-wrap[data-playable]:focus-within .track-play-hint svg {
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+
+  /* When the track is actively playing, the equalizer is on. On hover the
+   * pause chip takes over — fade the equalizer so the two don't overlap. */
+  .track-card-wrap[data-playable]:hover .equalizer,
+  .track-card-wrap[data-playable]:focus-within .equalizer {
+    opacity: 0;
+  }
+}
+
+.equalizer {
+  transition: opacity 200ms ease;
+}
+
+/* ───── circular equalizer ─────
+ * Bars are laid out around the centre, each rotated to its angular
+ * position with translateY pushing it outward. Heights and opacities are
+ * driven from JS (Equalizer.tsx) — either from a real WebAudio
+ * AnalyserNode in preview mode, or a procedural multi-sine shimmer when
+ * we can't see the audio (SDK mode, pre-play).
+ *
+ * The transform on each bar combines the rotation/translation that's set
+ * inline in the component with a final translateY based on --eq-h, so
+ * the bar grows OUTWARD from its inner edge instead of stretching from
+ * its centre and looking like a fan blade. */
+
+.equalizer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  overflow: visible;
+}
+
+/* Hide the equalizer entirely while the track-info modal is open.
+ * The rAF loop in Equalizer.tsx pauses when selected != null (saves
+ * CPU); this rule additionally suppresses paint of the 64 bars + halo
+ * while they're occluded by the modal anyway, so the View Transitions
+ * root snapshot doesn't have to capture them. body:has(...) lets the
+ * rule live in CSS instead of plumbing extra props through every
+ * TrackCard. */
+body:has(.track-info-dialog[data-state="open"]) .equalizer {
+  visibility: hidden;
+}
+
+.equalizer-halo {
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    var(--accent-9) 0%,
+    transparent 65%
+  );
+  opacity: 0.18;
+  filter: blur(10px);
+  animation: eqHaloPulse 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes eqHaloPulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.14; }
+  50%      { transform: scale(1.04); opacity: 0.36; }
+}
+
+/* Each bar lives inside a same-size square wrap; rotating the wrap moves
+ * the bar to its angular slot around the centre. Inside the wrap, the bar
+ * is anchored by its bottom edge at (50% - --eq-inner) from the top — i.e.
+ * exactly at the album-art rim — and grows upward (radially outward). */
+.equalizer-ray {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+}
+
+.equalizer-bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(50% + var(--eq-inner, 36%));
+  width: 3px;
+  height: var(--eq-h, 8px);
+  margin-left: -1.5px;
+  background: linear-gradient(
+    to top,
+    var(--accent-11) 0%,
+    var(--accent-9) 55%,
+    var(--accent-7) 100%
+  );
+  border-radius: 2px;
+  opacity: var(--eq-o, 0.6);
+  box-shadow:
+    0 0 4px var(--accent-9),
+    0 0 10px rgba(46, 160, 67, 0.55);
+  /* JS already eases per-frame; these tiny transitions just smooth out the
+   * inter-frame steps. */
+  transition: height 60ms linear, opacity 80ms linear;
+  will-change: height, opacity;
+}
+
+.track-meta {
+  min-height: 44px;
+  padding: 4px 8px 8px;
+}
+
+.track-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--gray-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-artist {
+  font-size: 12px;
+  color: var(--gray-10);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ───── bottom playback bar ───── */
+
+/* Theme wrapper that hosts the now-playing bar in a body-level Portal.
+ * Its only job is to (a) re-establish Radix theme CSS vars (--accent-9
+ * etc.) for the bar, and (b) win the stacking-context fight against
+ * Radix dialog portals so the bar stays visible AND interactive while
+ * any modal is open. The wrapper itself is invisible and click-through;
+ * the bar inside re-enables pointer events. */
+.now-playing-portal-shell {
+  position: fixed !important;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.now-playing-portal-shell > .now-playing-bar {
+  pointer-events: auto;
+}
+
+.now-playing-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  /* Liquid-glass surface — same recipe as the track-info dialog: a
+   * subtle top-edge highlight gradient layered over a translucent
+   * dark tint, with heavy backdrop-filter blur and saturation boost
+   * so the page tints the glass. The 1px hairline on top is drawn as
+   * a flat box-shadow (not border) so it doesn't take layout height
+   * and reads as a glass edge highlight rather than a solid divider. */
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(255, 255, 255, 0) 40%
+    ),
+    rgba(18, 18, 20, 0.5);
+  border-top: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 -8px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(36px) saturate(1.5);
+  -webkit-backdrop-filter: blur(36px) saturate(1.5);
+  /* Top of the stacking order — the player must stay visible AND
+   * interactive even when modals (track-info, similar-search) or full-
+   * page loaders dim the rest of the page. Sits above Radix dialog
+   * overlays / content; toasts sit one layer above the bar so a
+   * "saved!" toast still reads on top of the player. */
+  z-index: 9999;
+  box-sizing: border-box;
+}
+
+/* Two-stage entrance: the whole bar slides up from below the viewport,
+ * then its direct children fade in once it's almost settled.
+ * The animation runs once on mount — subsequent re-renders (pause / play
+ * / track change) keep the bar mounted, so the slide doesn't repeat.
+ *
+ * The slide uses easeOutQuint (cubic-bezier(0.22, 1, 0.36, 1)) — a long
+ * deceleration tail with no overshoot. The bar arrives quickly but settles
+ * gently, the way a phone sheet does. Pair with a generous duration so
+ * the slide reads as fluid rather than snappy. */
+@media (prefers-reduced-motion: no-preference) {
+  .now-playing-bar {
+    animation: nowPlayingSlideUp 820ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    will-change: transform;
+  }
+
+  .now-playing-bar > * {
+    animation: nowPlayingChildFade 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    /* Start fading once the bar is in its last ~20% of travel — the two
+     * motions overlap so the arrival reads as one continuous action,
+     * never "slide → pause → fade". */
+    animation-delay: 660ms;
+  }
+
+  /* Stagger the fade left-to-right (art first, then text, then the
+   * controls cluster on the right) so the bar's contents settle in like
+   * a wave rather than appearing all at once. 80ms between siblings is
+   * fast enough to still feel like one motion, slow enough to read as
+   * intentional. */
+  .now-playing-bar > *:nth-child(2)  { animation-delay: 740ms; }
+  .now-playing-bar > *:nth-child(3)  { animation-delay: 820ms; }
+  .now-playing-bar > *:nth-child(4)  { animation-delay: 900ms; }
+  .now-playing-bar > *:nth-child(5)  { animation-delay: 980ms; }
+  .now-playing-bar > *:nth-child(6)  { animation-delay: 1060ms; }
+  .now-playing-bar > *:nth-child(7)  { animation-delay: 1140ms; }
+}
+
+@keyframes nowPlayingSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes nowPlayingChildFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.now-playing-text {
+  flex: 0 1 220px;
+  min-width: 0;
+}
+
+/* The title region is now a <button> so the click can fire the
+ * track-info modal. Reset all native button styling so it still looks
+ * like a plain text block; add a soft hover affordance so the click
+ * target is discoverable. */
+.now-playing-text-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border-radius: 6px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.now-playing-text-btn:hover,
+.now-playing-text-btn:focus-visible {
+  background: var(--gray-3);
+}
+
+.now-playing-text-btn:focus-visible {
+  outline: 2px solid var(--accent-9);
+  outline-offset: 1px;
+}
+
+
+.now-playing-seek {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Pointer cursor on the seek + volume sliders so it reads as interactive.
+ * Track gets a pointer (click-to-jump), thumb gets grab → grabbing while
+ * dragging. Disabled state keeps the default cursor. */
+.now-playing-bar .rt-SliderRoot:not([data-disabled]) {
+  cursor: pointer;
+}
+.now-playing-bar .rt-SliderRoot:not([data-disabled]) .rt-SliderThumb {
+  cursor: grab;
+}
+.now-playing-bar .rt-SliderRoot:not([data-disabled]) .rt-SliderThumb:active {
+  cursor: grabbing;
+}
+
+.now-playing-time {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  width: 38px;
+  text-align: center;
+}
+
+.now-playing-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.now-playing-volume {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Heart slot. Two instances render in NowPlayingBar.tsx — one between
+ * title and seek (desktop, Spotify-like), one tucked inside the controls
+ * block (mobile, so it groups with play/pause once seek + volume reflow
+ * to the second row). CSS picks which one shows by viewport. */
+.now-playing-favorite {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.now-playing-favorite-narrow {
+  display: none;
+}
+
+/* Mobile: re-flow into a two-row grid so we can keep the seek AND volume
+ * sliders visible (touch users want them, even if the available width is
+ * tight). Row 1: art | text | controls. Row 2: seek (full width minus
+ * volume) | volume. */
+@media (max-width: 700px) {
+  .now-playing-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "art text controls"
+      "seek seek volume";
+    column-gap: 12px;
+    row-gap: 10px;
+    padding: 10px 14px 12px;
+    align-items: center;
+  }
+  .now-playing-art {
+    grid-area: art;
+  }
+  .now-playing-text {
+    grid-area: text;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .now-playing-controls {
+    grid-area: controls;
+  }
+  .now-playing-seek {
+    grid-area: seek;
+    display: flex;
+  }
+  .now-playing-volume {
+    grid-area: volume;
+    display: flex;
+  }
+  /* On the smallest phones the volume slider's 100px is luxurious. The
+   * speaker icon + a 64px slider is plenty. */
+  .now-playing-volume .rt-SliderRoot {
+    width: 64px !important;
+  }
+  /* Swap the heart from the wide slot into the controls block. The narrow
+   * wrapper lives inside .now-playing-controls so it auto-inherits the
+   * controls' grid-area on the first row, sitting flush against
+   * prev/play/next without the bar's outer gap. */
+  .now-playing-favorite-wide {
+    display: none;
+  }
+  .now-playing-favorite-narrow {
+    display: inline-flex;
+  }
+}
+
+/* ───── global toast stack ─────
+ * Stacks above the now-playing bar in the bottom-right. Toasts slide in
+ * from the right and auto-dismiss after a few seconds (timer in
+ * components/Toaster.tsx). Backdrop blur + a translucent red fill keeps
+ * the page visible behind so users don't lose context. */
+
+.toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 96px;
+  /* One layer above the now-playing bar (z 9999) so transient toasts
+   * don't get hidden behind the player. */
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  max-width: 420px;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-3);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.55);
+  animation: toastIn 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  max-width: 100%;
+}
+
+/* color-mix lets us keep --red-9's saturation while compositing it over a
+ * transparent layer — without it we'd be picking arbitrary rgba values
+ * that don't track the theme tokens. */
+.toast[data-kind="error"] {
+  background: color-mix(in srgb, var(--red-9) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red-11) 80%, transparent);
+  color: white;
+}
+
+.toast[data-kind="info"] {
+  background: color-mix(in srgb, var(--gray-9) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gray-11) 70%, transparent);
+  color: white;
+}
+
+.toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+.toast-message {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.toast-dismiss {
+  flex-shrink: 0;
+  /* Override the ghost-button default colour so the × is visible against
+   * the red/gray backdrop. */
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.toast-dismiss:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .toast-stack {
+    left: 12px;
+    right: 12px;
+    bottom: 88px;
+    max-width: none;
+  }
+}
+
+.now-playing-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--gray-3);
+  position: relative;
+  transition: box-shadow 220ms ease;
+}
+
+/* The art is now a <button>; reset native chrome so it still looks
+ * like a circular thumbnail, and add a click affordance via cursor +
+ * a soft hover ring. */
+.now-playing-art-btn {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.now-playing-art-btn:focus-visible {
+  outline: 2px solid var(--accent-9);
+  outline-offset: 2px;
+}
+
+.now-playing-art-btn:hover img {
+  transform: scale(1.06);
+}
+
+.now-playing-art-btn img {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+
+.now-playing-art[data-playing="true"] {
+  box-shadow:
+    0 0 0 2px var(--accent-9),
+    0 0 14px var(--accent-9);
+  animation: nowPlayingPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes nowPlayingPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 2px var(--accent-9),
+      0 0 10px rgba(46, 160, 67, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--accent-9),
+      0 0 22px rgba(46, 160, 67, 0.95);
+  }
+}
+
+.now-playing-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ───── grids ─────
+ * Fixed column counts at four breakpoints rather than auto-fill — so a
+ * library with just one or two tracks doesn't stretch each card to fill
+ * a whole 1fr slot, and the layout is predictable across viewports:
+ *
+ *   <600px (mobile):     1 column
+ *   600–899 (tablet):    2 columns
+ *   900–1199 (laptop):   3 columns
+ *   ≥1200 (desktop):     4 columns
+ */
+
+.track-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 600px) {
+  .track-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+@media (min-width: 900px) {
+  .track-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .track-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 24px;
+  }
+}
+
+/* Push page content above the now-playing bar. Desktop bar is ~72px tall
+ * (single row). On mobile the bar grows to two rows for the seek + volume
+ * sliders, so we bump the bottom padding to match. Gated on the bar being
+ * mounted via :has() — when nothing is playing the bar returns null and we
+ * skip the padding, otherwise the page ends in a tall empty strip below
+ * the footer. */
+body:has(.now-playing-bar) .app-main {
+  padding-bottom: 96px;
+}
+
+@media (max-width: 700px) {
+  body:has(.now-playing-bar) .app-main {
+    padding-bottom: 140px;
+  }
+}
+
+/* ───── track-info modal ───── */
+
+/* Big square art on the left of the modal. Uses aspect-ratio so it
+ * stays square at any viewport, and a glow ring to lift it off the
+ * dialog background. */
+.track-info-art {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-4);
+  overflow: hidden;
+  background: var(--gray-3);
+  box-shadow:
+    0 12px 40px -12px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.track-info-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Big play button in the modal — branded grass, bigger than a card
+ * button to emphasize the primary action on this screen. */
+.track-info-play-btn {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: var(--accent-9);
+  color: var(--gray-1);
+  cursor: pointer;
+  transition: background 140ms ease, transform 120ms ease;
+}
+
+.track-info-play-btn:hover:not(:disabled) {
+  background: var(--accent-10);
+  transform: translateY(-1px);
+}
+
+.track-info-play-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Similar-tracks wrap — animates from 0 → auto height when the data
+ * arrives. Uses the grid-template-rows trick (0fr → 1fr) which is the
+ * one CSS technique that smoothly interpolates between collapsed and
+ * content-sized in a single declaration. The inner overflow:hidden +
+ * min-height:0 are required for the trick to clip cleanly while the
+ * row resizes. */
+.track-info-similar-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.track-info-similar-wrap[data-loaded="true"] {
+  grid-template-rows: 1fr;
+}
+
+.track-info-similar-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Each similar row fades + slides up on its own delay relative to the
+ * row index. Animation runs as soon as the row mounts (which is when
+ * the data arrives), independent of the morph timing. */
+@media (prefers-reduced-motion: no-preference) {
+  .track-info-similar-row {
+    animation: trackInfoSimilarRowRise 380ms cubic-bezier(0.22, 1, 0.36, 1)
+      backwards;
+    animation-delay: calc(120ms + var(--row-index, 0) * 60ms);
+  }
+}
+
+@keyframes trackInfoSimilarRowRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Similar-tracks rows — compact 56px-art + title/artist. Whole row is
+ * a button so click anywhere starts the track. */
+.track-info-similar-row {
+  appearance: none;
+  background: var(--gray-2);
+  border: 1px solid var(--gray-4);
+  border-radius: var(--radius-3);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    transform 140ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.track-info-similar-row:hover:not(:disabled) {
+  border-color: var(--gray-6);
+  background: var(--gray-3);
+  transform: translateX(2px);
+}
+
+.track-info-similar-row[data-playing] {
+  border-color: var(--accent-8);
+  background: var(--gray-3);
+}
+
+.track-info-similar-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.track-info-similar-art {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-2);
+  overflow: hidden;
+  background: var(--gray-3);
+}
+
+.track-info-similar-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* The dialog fills the entire viewport so the clip-path circle
+ * coordinate system matches the click coordinates we recorded with
+ * getBoundingClientRect(). Radix Themes' default centered-with-
+ * translate positioning makes the dialog's local (0,0) sit far from
+ * the viewport's (0,0), which is what was making the circle reveal
+ * from the wrong place. Pinning the dialog to inset:0 fixes that. */
+/* The dialog is the View Transitions target, so the card morph
+ * interpolates from the small card rect to this larger centered
+ * panel.
+ *
+ * Background is OPAQUE during the morph (rgba 0.92 — almost solid
+ * dark) so the View Transition has a clean filled surface to animate.
+ * Once the morph + content stagger have fully landed, the
+ * `trackInfoBlurIn` keyframe transitions the background to a
+ * liquid-glass state — translucent tint, top-edge highlight, heavy
+ * backdrop blur. The base rule does NOT use !important on background
+ * or backdrop-filter so the keyframe (running with forwards fill) is
+ * able to take over those properties. !important is reserved for the
+ * edge-creating properties that would otherwise interpolate
+ * incorrectly during the View Transitions morph. */
+.track-info-dialog {
+  background: rgba(14, 14, 14, 0.92);
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.7) !important;
+  will-change: transform, opacity;
+}
+
+/* When a track is playing, the fixed now-playing bar (portaled to body)
+ * occludes the bottom of the dialog. Add bottom padding to the inner
+ * content so the last items — Play/Save buttons, similar-tracks list —
+ * scroll into view above the bar. Mirrors body:has(.now-playing-bar)
+ * .app-main but applies to the modal's scroll container instead. */
+body:has(.now-playing-bar) .track-info-content {
+  padding-bottom: 40px;
+}
+
+@media (max-width: 700px) {
+  body:has(.now-playing-bar) .track-info-content {
+    padding-bottom: 180px;
+  }
+}
+
+/* Modal contents start hidden during the circle expansion, then
+ * stagger-fade-in once the dialog covers the viewport. The order —
+ * close button, then the main info row, then the similar-tracks wrap
+ * — is what the eye scans naturally on a card-of-info layout. */
+.track-info-content > * {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .track-info-content > * {
+    animation: trackInfoBodyRise 260ms cubic-bezier(0.22, 1, 0.36, 1)
+      forwards;
+    animation-delay: 400ms;
+  }
+  /* First child shows up right as the 360ms VT finishes; rest stagger
+   * 60ms apart. */
+  .track-info-content > *:nth-child(1) { animation-delay: 400ms; }
+  .track-info-content > *:nth-child(2) { animation-delay: 460ms; }
+  .track-info-content > *:nth-child(3) { animation-delay: 520ms; }
+  .track-info-content > *:nth-child(4) { animation-delay: 580ms; }
+}
+
+@keyframes trackInfoBodyRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* placeholder — the dialog's animations are declared as a single
+ * shorthand below so the browser doesn't drop one of them. */
+
+/* Once the morph + content fade-in have settled, introduce the glassy
+ * backdrop filter. Animating backdrop-filter live is the single most
+ * expensive thing the modal does, so we delay it until everything
+ * else has stabilized. */
+@keyframes trackInfoBlurIn {
+  to {
+    /* Liquid-glass surface: a low-opacity tinted base layered under a
+     * subtle top-down highlight that simulates light catching the
+     * upper edge of a glass pane. Blur radius dialled back to 22px —
+     * still reads as glass, but ~half the per-frame convolution cost
+     * vs 40px. Library has 50+ rendered TrackCards with images
+     * underneath, so the cheaper blur is what makes the morph feel
+     * fluid there instead of laggy. */
+    background:
+      linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.07) 0%,
+        rgba(255, 255, 255, 0) 32%
+      ),
+      rgba(18, 18, 20, 0.42);
+    backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  }
+}
+
+/* Soften the Radix dim so the page is still visible behind the modal.
+ * The backdrop fade-in is delayed until AFTER the morph completes
+ * AND the content stagger has fully revealed the popup (~840ms total
+ * from open). The page stays bright while the card is morphing into
+ * the dialog and while the popup contents are settling in; only once
+ * the user can see the full details does the backdrop fade in to
+ * commit the modal as the focal point.
+ *
+ * Liquid-glass treatment: a light tint (low alpha) with a strong
+ * backdrop blur. The page beneath becomes an out-of-focus colored
+ * wash through the overlay — same physics as the dialog itself,
+ * just at a larger scale. */
+.rt-BaseDialogOverlay:has(> .track-info-dialog),
+.rt-DialogOverlay:has(> .track-info-dialog) {
+  background: rgba(8, 8, 10, 0.32);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rt-BaseDialogOverlay:has(> .track-info-dialog[data-state="open"]),
+  .rt-DialogOverlay:has(> .track-info-dialog[data-state="open"]) {
+    animation:
+      trackInfoOverlayFade 520ms cubic-bezier(0.22, 1, 0.36, 1) 380ms both,
+      overlayBlurIn 520ms cubic-bezier(0.22, 1, 0.36, 1) 380ms forwards;
+  }
+}
+
+@keyframes trackInfoOverlayFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlayBlurIn {
+  to {
+    /* Halved from blur(14px) — overlay covers the whole viewport,
+     * which on Library is 50+ cards with images. A 14px convolution
+     * over that area was a major contributor to morph lag. */
+    backdrop-filter: blur(7px) saturate(1.2);
+    -webkit-backdrop-filter: blur(7px) saturate(1.2);
+  }
+}
+
+/* The dialog's open animations — entrance fade + delayed glass
+ * settle — are declared as a SINGLE animation shorthand. Two
+ * separate `animation:` declarations on the same selector would have
+ * the second one fully overwrite the first (animation is a shorthand
+ * that resets every sub-property), so we list both names
+ * comma-separated to run them in parallel. */
+@media (prefers-reduced-motion: no-preference) {
+  .track-info-dialog[data-state="open"] {
+    /* Glass settle now starts at 380ms (just as the 360ms morph
+     * lands) and runs over 520ms — long enough to bloom gracefully,
+     * but starting early enough that you don't see an opaque popup
+     * for an awkward beat before the glass kicks in. The settle
+     * overlaps the content stagger; the transparency builds while
+     * the rows are still fading in. */
+    animation:
+      trackInfoFade 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards,
+      trackInfoBlurIn 520ms cubic-bezier(0.22, 1, 0.36, 1) 380ms forwards;
+  }
+
+  /* Close: kill any animations Radix would otherwise apply on
+   * data-state="closed" — the View Transitions API runs the close
+   * morph, so a competing CSS animation on the live element causes
+   * the brief flash you saw at the end of close. */
+  .track-info-dialog[data-state="closed"] {
+    animation: none !important;
+  }
+}
+
+@keyframes trackInfoFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* View Transitions API — the originator (card / footer art / footer
+ * title) and the modal carry the same view-transition-name during the
+ * morph. The browser interpolates the bounding box between them. The
+ * trick that makes the morph CIRCULAR rather than rectangular: both
+ * endpoints are clipped to a circle while transitioning. The morph
+ * shape is therefore a circle scaling and translating from the
+ * originator's centre to the modal's centre. */
+@supports (view-transition-name: foo) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    /* easeOutQuint — slow start gives the GPU a beat to settle the
+     * snapshot before the geometry starts changing fast (which is
+     * where lag was most visible), then a long deceleration tail
+     * lands the card in place softly. */
+    animation-duration: 360ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 180ms;
+  }
+  /* Clip every transitioning group to its interpolated bounds so the
+   * snapshot doesn't visually overshoot the modal at the end. */
+  ::view-transition-group(*) {
+    overflow: hidden;
+  }
+  /* Anchor the captured snapshots to the centre of the morphing group
+   * so the morph reads as "grow from the centre" rather than "stretch
+   * from the upper-left corner outward". */
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    translate: -50% -50%;
+    object-fit: cover;
+    object-position: center;
+  }
+}
+
+/* ───── topbar ───── */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--gray-4);
+}
+
+.topbar-logo {
+  flex-shrink: 0;
+}
+
+.topbar-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+/* Desktop: text-only nav (icon hidden). Mobile flips this — see below. */
+.topbar-nav-icon {
+  display: none;
+  align-items: center;
+}
+
+.topbar-nav-label {
+  display: inline;
+}
+
+/* Mobile + medium viewports: drop verbose labels so everything fits on
+ * one row. The breakpoint was 700px originally — bumped to 1024px after
+ * Ukrainian translations + the right-hand cluster (language picker +
+ * avatar + signout) made the nav text collide with the language-picker
+ * globe at ~900–1024px viewports.
+ *   - Nav links become icon-only (Bookmark / MagicWand)  (≤ 1024px)
+ *   - "Sign out" button keeps the icon, drops the label  (≤ 1024px)
+ *   - "music" suffix in the logo drops at the smallest   (≤ 480px) */
+@media (max-width: 1024px) {
+  .topbar-nav-icon {
+    display: inline-flex;
+  }
+  .topbar-nav-label {
+    display: none;
+  }
+  .topbar-nav-link {
+    padding: 6px 8px;
+  }
+  .topbar-signout-text {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar-logo-suffix {
+    display: none;
+  }
+}
+
+/* Provider sign-in cluster lives only on tablet+; on phones it overflows
+ * the bar and gets clipped by the language picker / avatar to its right.
+ * The landing hero renders the same buttons inline a few hundred pixels
+ * below, so anon visitors aren't stranded. */
+@media (max-width: 700px) {
+  /* Specificity bump: Radix's `.rt-Flex { display: flex }` is loaded
+   * after this stylesheet, so a bare `.topbar-signin-buttons` selector
+   * (same specificity) loses on source order. */
+  .app-header .topbar-signin-buttons {
+    display: none;
+  }
+}
+
+/* ───── provider chip (TopBar) ─────
+ * Hide the chip between 700px (where the mobile menu takes over) and
+ * 900px so it doesn't overlap the language picker + avatar + signout
+ * cluster. On wider viewports it sits comfortably next to the avatar. */
+@media (max-width: 900px) {
+  .topbar-provider-chip {
+    display: none !important;
+  }
+}
+
+/* ───── topbar: mobile vs desktop split ─────
+ * The desktop topbar packs nav links + telegram + language + avatar +
+ * signout across one row. On phones (≤ 700px) this becomes unreadable
+ * — eight tappable items on a 360px viewport. The MobileMenu component
+ * collapses everything into a hamburger that opens a Dialog with the
+ * same actions in a tap-friendly column.
+ *
+ * The split is purely CSS so React renders both regardless of viewport;
+ * we just hide whichever doesn't apply. Avoids hydration mismatches
+ * and a flash of the wrong layout on resize. */
+.topbar-mobile-menu {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  .topbar-mobile-menu {
+    display: inline-flex !important;
+  }
+  .app-header .topbar-desktop-cluster,
+  .app-header .topbar-desktop-nav {
+    display: none !important;
+  }
+}
+
+/* ───── mobile menu dialog ───── */
+.mobile-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-3);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--gray-12);
+  transition: background 120ms ease;
+}
+.mobile-menu-row:hover {
+  background: var(--gray-3);
+}
+.mobile-menu-row[data-active] {
+  background: var(--gray-4);
+}
+.mobile-menu-tg {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * LANDING PAGES (/, /ai-mood-search)
+ * ═══════════════════════════════════════════════════════════════════ */
+
+.landing {
+  position: relative;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* ───── Hero ───── */
+.landing-hero {
+  position: relative;
+  padding: clamp(64px, 10vw, 140px) 0 clamp(48px, 8vw, 96px);
+  /* No overflow: hidden — the orb glow needs to bleed below the hero
+   * boundary so the next section blends in naturally instead of meeting
+   * a hard horizontal seam. Horizontal scroll is contained by body's
+   * overflow-x: hidden. */
+  overflow-x: clip;
+  isolation: isolate;
+}
+
+.landing-hero-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-hero-bg {
+  position: absolute;
+  /* Extend ~160px below the hero so the orbs' soft blur naturally
+   * dissolves into the next section instead of cutting off at the
+   * hero boundary. The next section sits above this layer via
+   * z-index, so content remains crisp. */
+  inset: 0 0 -160px 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.landing-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.35;
+  animation: orbDrift 24s ease-in-out infinite;
+}
+
+.landing-orb-1 {
+  width: 520px;
+  height: 520px;
+  top: -160px;
+  left: -100px;
+  background: radial-gradient(circle, var(--accent-9) 0%, transparent 70%);
+  animation-delay: 0s;
+}
+
+.landing-orb-2 {
+  width: 460px;
+  height: 460px;
+  top: 80px;
+  right: -120px;
+  background: radial-gradient(circle, #7c3aed 0%, transparent 70%);
+  animation-delay: -8s;
+  opacity: 0.28;
+}
+
+.landing-orb-3 {
+  width: 380px;
+  height: 380px;
+  bottom: -120px;
+  left: 30%;
+  background: radial-gradient(circle, #ec4899 0%, transparent 70%);
+  animation-delay: -16s;
+  opacity: 0.22;
+}
+
+.landing-orb-ai-1 {
+  width: 540px;
+  height: 540px;
+  top: -160px;
+  left: -120px;
+  background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
+  filter: blur(90px);
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: orbDrift 24s ease-in-out infinite;
+}
+
+.landing-orb-ai-2 {
+  width: 480px;
+  height: 480px;
+  top: 60px;
+  right: -140px;
+  background: radial-gradient(circle, var(--accent-9) 0%, transparent 70%);
+  filter: blur(90px);
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.32;
+  animation: orbDrift 28s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+.landing-orb-ai-3 {
+  width: 360px;
+  height: 360px;
+  bottom: -100px;
+  left: 40%;
+  background: radial-gradient(circle, #f5a524 0%, transparent 70%);
+  filter: blur(90px);
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.18;
+  animation: orbDrift 30s ease-in-out infinite;
+  animation-delay: -18s;
+}
+
+@keyframes orbDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(40px, -30px) scale(1.08); }
+  66%      { transform: translate(-30px, 40px) scale(0.95); }
+}
+
+.landing-grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+
+.landing-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-9) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-9) 28%, transparent);
+  color: var(--accent-11);
+  animation: landingFadeUp 700ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+.landing-eyebrow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-10);
+  box-shadow: 0 0 12px var(--accent-9);
+  animation: eyebrowPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes eyebrowPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.4); opacity: 0.7; }
+}
+
+.landing-hero-title {
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+  background: linear-gradient(180deg, var(--gray-12) 0%, color-mix(in srgb, var(--gray-12) 70%, transparent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: landingFadeUp 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 80ms backwards;
+}
+
+.landing-hero-tagline {
+  max-width: 540px;
+  color: var(--gray-12);
+  letter-spacing: -0.01em;
+  animation: landingFadeUp 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 160ms backwards;
+}
+
+.landing-hero-sub {
+  max-width: 620px;
+  line-height: 1.55;
+  animation: landingFadeUp 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 240ms backwards;
+}
+
+.landing-hero-cta {
+  margin-top: 8px;
+  animation: landingFadeUp 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 320ms backwards;
+}
+
+.landing-provider-row {
+  animation: landingFadeUp 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 380ms backwards;
+}
+
+/* Mobile CTA sizing: at ≤480px the hero buttons wrap into a single
+ * column. Cap each button at 280px so they don't stretch to the full
+ * viewport (looks like a banner, not a button), and bump the row gap
+ * to 16px so stacked tap targets have breathing room. Same treatment
+ * for the secondary provider row directly below. */
+@media (max-width: 480px) {
+  .landing-hero-cta,
+  .landing-provider-row {
+    gap: 16px;
+  }
+  .landing-hero-cta > *,
+  .landing-provider-row > * {
+    width: 100%;
+    max-width: 280px !important;
+  }
+  .landing-ai-btn {
+    width: 100%;
+    max-width: 280px;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+    height: auto !important;
+  }
+}
+
+.landing-mood-search {
+    max-width: 800px;
+    display: flex;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.landing-preview-note {
+  max-width: 480px;
+  animation: landingFadeUp 800ms cubic-bezier(0.2, 0.7, 0.2, 1) 440ms backwards;
+}
+
+.landing-btn-primary {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-9) 40%, transparent),
+    0 8px 24px -8px color-mix(in srgb, var(--accent-9) 60%, transparent);
+  transition: transform 160ms ease, box-shadow 200ms ease;
+}
+
+.landing-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-9) 60%, transparent),
+    0 12px 32px -8px color-mix(in srgb, var(--accent-9) 70%, transparent);
+}
+
+@keyframes landingFadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ───── Sections ───── */
+.landing-section {
+  padding: clamp(40px, 6vw, 72px) 0;
+  position: relative;
+}
+
+/* Children of every landing section sit above any decorative bleed
+ * (e.g. orb glow extending from the hero into the section below). */
+.landing-section > * {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-section + .landing-section {
+  padding-top: clamp(24px, 4vw, 48px);
+}
+
+.landing-section-search {
+  padding-top: clamp(32px, 5vw, 56px);
+  padding-bottom: clamp(24px, 4vw, 48px);
+}
+
+/* When the SC search section sits between the hero and how-it-works,
+ * keep the gap to the next section tight. The hero already added its
+ * own bottom breathing room. */
+.landing-section-search + .landing-section-how {
+  padding-top: clamp(32px, 5vw, 56px);
+}
+
+.landing-search-shell {
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ───── How-it-works steps ───── */
+.landing-step {
+  position: relative;
+  padding: 28px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--gray-2) 92%, transparent);
+  border: 1px solid var(--gray-4);
+  transition: transform 220ms ease, border-color 220ms ease, background 220ms ease;
+  height: 100%;
+}
+
+.landing-step:hover {
+  transform: translateY(-2px);
+  border-color: var(--gray-6);
+  background: color-mix(in srgb, var(--gray-3) 92%, transparent);
+}
+
+.landing-step[data-highlighted] {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--accent-9) 14%, var(--gray-2)) 0%,
+    var(--gray-2) 100%
+  );
+  border-color: color-mix(in srgb, var(--accent-9) 34%, var(--gray-4));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-9) 24%, transparent),
+    0 16px 40px -16px color-mix(in srgb, var(--accent-9) 35%, transparent);
+}
+
+.landing-step-icon {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-9) 18%, transparent);
+  color: var(--accent-11);
+  border: 1px solid color-mix(in srgb, var(--accent-9) 28%, transparent);
+}
+
+.landing-step[data-highlighted] .landing-step-icon {
+  background: var(--accent-9);
+  color: white;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent-9) 60%, transparent);
+}
+
+/* ───── Feature cards ───── */
+.landing-feature-card {
+  position: relative;
+  padding: 24px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--gray-2) 92%, transparent);
+  border: 1px solid var(--gray-4);
+  overflow: hidden;
+  transition: transform 220ms ease, border-color 220ms ease;
+}
+
+.landing-feature-card::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, var(--feature-accent, var(--accent-9)) 0%, transparent 65%);
+  opacity: 0.12;
+  pointer-events: none;
+  transition: opacity 280ms ease, transform 320ms ease;
+}
+
+.landing-feature-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--feature-accent, var(--accent-9)) 40%, var(--gray-4));
+}
+
+.landing-feature-card:hover::before {
+  opacity: 0.22;
+  transform: scale(1.15);
+}
+
+.landing-feature-icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--feature-accent, var(--accent-9)) 16%, transparent);
+  color: var(--feature-accent, var(--accent-11));
+  border: 1px solid color-mix(in srgb, var(--feature-accent, var(--accent-9)) 28%, transparent);
+}
+
+/* ───── Mood pills ───── */
+.landing-mood-pills {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.landing-mood-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gray-3) 70%, transparent);
+  border: 1px solid var(--gray-5);
+  color: var(--gray-12);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 200ms ease, background 200ms ease, border-color 200ms ease, color 200ms ease;
+  animation: landingFadeUp 600ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation-delay: calc(60ms * var(--pill-index, 0));
+}
+
+.landing-mood-pill svg {
+  color: var(--accent-10);
+  flex-shrink: 0;
+}
+
+.landing-mood-pill:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent-9) 14%, var(--gray-3));
+  border-color: color-mix(in srgb, var(--accent-9) 40%, var(--gray-5));
+}
+
+/* ───── Final CTA ───── */
+.landing-cta-card {
+  position: relative;
+  padding: clamp(40px, 6vw, 64px) clamp(24px, 4vw, 56px);
+  border-radius: 24px;
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--accent-9) 10%, var(--gray-2)) 0%,
+      var(--gray-2) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent-9) 26%, var(--gray-4));
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.landing-cta-glow {
+  position: absolute;
+  inset: -40%;
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent-9) 32%, transparent) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, color-mix(in srgb, #7c3aed 28%, transparent) 0%, transparent 45%);
+  pointer-events: none;
+  z-index: -1;
+  filter: blur(40px);
+  opacity: 0.7;
+}
+
+/* ───── Footer ───── */
+.landing-footer {
+  padding: clamp(32px, 4vw, 48px) clamp(16px, 3vw, 32px);
+  margin-top: clamp(40px, 6vw, 72px);
+  border-top: 1px solid var(--gray-4);
+  background: rgba(10, 10, 10, 0.5);
+}
+
+.landing-footer-link {
+  font-size: 14px;
+  color: var(--gray-11);
+  transition: color 160ms ease;
+  padding: 4px 2px;
+}
+
+.landing-footer-link:hover {
+  color: var(--accent-10);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * AI MOOD LANDING — extras
+ * ═══════════════════════════════════════════════════════════════════ */
+
+.ai-hero-grid {
+  align-items: center;
+}
+
+.ai-hero-copy {
+  text-align: left;
+}
+
+.ai-hero-title {
+  text-align: left;
+  letter-spacing: -0.035em;
+}
+
+.ai-hero-sub {
+  max-width: 560px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1023px) {
+  .ai-hero-copy {
+    text-align: center;
+    align-items: center;
+  }
+  .ai-hero-title {
+    text-align: center;
+  }
+}
+
+/* ───── Demo card ───── */
+.ai-demo-card {
+  position: relative;
+  padding: 22px;
+  border-radius: 18px;
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--gray-3) 96%, transparent) 0%,
+      color-mix(in srgb, var(--gray-2) 96%, transparent) 100%);
+  border: 1px solid var(--gray-5);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 30px 60px -30px rgba(0, 0, 0, 0.6),
+    0 0 80px -20px color-mix(in srgb, var(--accent-9) 30%, transparent);
+  animation: landingFadeUp 900ms cubic-bezier(0.2, 0.7, 0.2, 1) 200ms backwards;
+}
+
+.ai-demo-label {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px !important;
+}
+
+.ai-demo-eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 18px;
+}
+
+.ai-demo-eq span {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent-10);
+  box-shadow: 0 0 6px var(--accent-9);
+  animation: aiDemoEq 1100ms ease-in-out infinite;
+}
+
+.ai-demo-eq span:nth-child(1) { height: 30%; animation-delay: 0ms; }
+.ai-demo-eq span:nth-child(2) { height: 70%; animation-delay: 120ms; }
+.ai-demo-eq span:nth-child(3) { height: 50%; animation-delay: 240ms; }
+.ai-demo-eq span:nth-child(4) { height: 90%; animation-delay: 80ms; }
+.ai-demo-eq span:nth-child(5) { height: 40%; animation-delay: 200ms; }
+
+@keyframes aiDemoEq {
+  0%, 100% { transform: scaleY(0.5); opacity: 0.7; }
+  50%      { transform: scaleY(1); opacity: 1; }
+}
+
+.ai-demo-prompt {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-9) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-9) 28%, transparent);
+  color: var(--gray-12);
+}
+
+.ai-demo-tracks {
+  margin-top: 8px;
+}
+
+.ai-demo-track {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--gray-4) 30%, transparent);
+  border: 1px solid var(--gray-4);
+  animation: landingFadeUp 600ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation-delay: calc(400ms + 90ms * var(--track-index, 0));
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.ai-demo-track:hover {
+  background: color-mix(in srgb, var(--accent-9) 10%, var(--gray-4));
+  transform: translateX(2px);
+}
+
+.ai-demo-track-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-9);
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-9) 50%, transparent);
+}
+
+/* ───── Why-cards ───── */
+.ai-why-card {
+  padding: 24px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--gray-2) 92%, transparent);
+  border: 1px solid var(--gray-4);
+  transition: transform 200ms ease, border-color 200ms ease;
+}
+
+.ai-why-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent-9) 35%, var(--gray-4));
+}
+
+.ai-why-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-9) 16%, transparent);
+  color: var(--accent-11);
+  border: 1px solid color-mix(in srgb, var(--accent-9) 28%, transparent);
+}
+
+/* ───── FAQ ───── */
+.ai-faq-item {
+  border: 1px solid var(--gray-4);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--gray-2) 92%, transparent);
+  padding: 16px 20px;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+
+.ai-faq-item[open] {
+  border-color: color-mix(in srgb, var(--accent-9) 36%, var(--gray-4));
+  background: color-mix(in srgb, var(--gray-3) 92%, transparent);
+}
+
+.ai-faq-item summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-faq-item summary::-webkit-details-marker { display: none; }
+
+.ai-faq-item summary::after {
+  content: "+";
+  font-size: 24px;
+  line-height: 1;
+  color: var(--gray-11);
+  transition: transform 220ms ease, color 220ms ease;
+  flex-shrink: 0;
+}
+
+.ai-faq-item[open] summary::after {
+  content: "−";
+  color: var(--accent-10);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-orb,
+  .landing-orb-ai-1,
+  .landing-orb-ai-2,
+  .landing-orb-ai-3,
+  .landing-eyebrow-dot,
+  .ai-demo-eq span,
+  .landing-eyebrow,
+  .landing-hero-title,
+  .landing-hero-tagline,
+  .landing-hero-sub,
+  .landing-hero-cta,
+  .landing-provider-row,
+  .landing-preview-note,
+  .landing-mood-pill,
+  .ai-demo-card,
+  .ai-demo-track {
+    animation: none !important;
+  }
+}

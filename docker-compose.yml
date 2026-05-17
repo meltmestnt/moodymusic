@@ -1,0 +1,78 @@
+# Local-dev backing services for moodymusic. Run with `npm run db:up`.
+#
+#   mongo          — analytics persistence (searches, plays, favorites)
+#   mongo-express  — web UI for browsing the Mongo collections (optional)
+#   redis          — 15-min cache for mood-search results (skips both the
+#                    OpenAI call and the Spotify-resolution roundtrip)
+#
+# Auth is intentionally OFF — this is a localhost-only stack used while
+# developing. Do NOT deploy this compose file as-is to anything reachable
+# from the internet.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: moodymusic-mongo
+    restart: unless-stopped
+    ports:
+      # Expose on the host's 27017 so the Next.js dev server connects to
+      # mongodb://localhost:27017 from outside the docker network.
+      - "27017:27017"
+    volumes:
+      # Named volume keeps your data across `docker compose down` cycles.
+      # `docker volume rm moodymusic_mongo-data` to start fresh.
+      - mongo-data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.adminCommand('ping').ok",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional web UI for browsing collections — handy for inspecting the
+  # `searches`, `plays`, `favorites` rows the app inserts. Open
+  # http://localhost:8081 once it's up.
+  mongo-express:
+    image: mongo-express:1
+    container_name: moodymusic-mongo-ui
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017
+      # Disable mongo-express's own basic auth — localhost-only, single
+      # developer. Re-enable + set ME_CONFIG_BASICAUTH_USERNAME / _PASSWORD
+      # before exposing this anywhere.
+      ME_CONFIG_BASICAUTH: "false"
+
+  redis:
+    image: redis:7-alpine
+    container_name: moodymusic-redis
+    restart: unless-stopped
+    ports:
+      # Expose 6379 so the Next.js dev server connects via
+      # redis://localhost:6379 from outside the docker network.
+      - "6379:6379"
+    volumes:
+      # appendonly persistence so cached mood searches survive a
+      # `docker compose down` cycle. Wipe with `npm run db:reset`.
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo-data:
+  redis-data:

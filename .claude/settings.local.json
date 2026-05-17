@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(pnpm --version)",
+      "Bash(yarn --version)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} \\(size %{size_download} bytes\\)\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} \\(size %{size_download} bytes\\)\\\\n\" http://localhost:3000/library)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} \\(size %{size_download} bytes\\)\\\\n\" http://localhost:3000/mood)",
+      "Bash(kill %1)",
+      "Bash(curl -s -o /dev/null -w \"/ → HTTP %{http_code}\\\\n\" http://localhost:3001/)",
+      "Bash(curl -s -o /dev/null -w \"/library → HTTP %{http_code}\\\\n\" http://localhost:3001/library)",
+      "Bash(curl -s -o /dev/null -w \"/mood → HTTP %{http_code}\\\\n\" http://localhost:3001/mood)",
+      "Bash(curl -s -o /tmp/lib.html -w \"HTTP %{http_code}\\\\n\" http://localhost:3001/library)",
+      "Read(//tmp/**)",
+      "Bash(curl *)",
+      "Bash(awk *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(npx tsc *)",
+      "Bash(xargs grep *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(npx next *)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 80)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 60)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 40)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 30)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 20)",
+      "Bash(node -e \"const s=require\\('sharp'\\); s\\('public/bot-icon.svg'\\).resize\\(512,512\\).png\\(\\).toFile\\('public/bot-icon.png'\\).then\\(i=>console.log\\('OK',i\\)\\).catch\\(e=>{console.error\\(e.message\\); process.exit\\(1\\)}\\)\")",
+      "Bash(netstat -ano)",
+      "Bash(python -c \"import sys, re; html = sys.stdin.read\\(\\); m = re.search\\(r'<a[^>]*ai-mood-search[^<]*<[^>]*>.{0,500}', html\\); print\\(m.group\\(0\\) if m else 'not found'\\)\")",
+      "Bash(node -e \"const s=require\\('sharp'\\); s\\('public/bot-banner.svg'\\).resize\\(640,360\\).png\\(\\).toFile\\('public/bot-banner.png'\\).then\\(i=>console.log\\('OK',i\\)\\).catch\\(e=>{console.error\\(e.message\\); process.exit\\(1\\)}\\)\")",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
+      <stop offset="0%" stop-color="#F86CA7"/>
+      <stop offset="55%" stop-color="#E93D82"/>
+      <stop offset="100%" stop-color="#621639"/>
+    </radialGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#ffe6ef"/>
+    </linearGradient>
+    <filter id="soft" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <circle cx="140" cy="120" r="160" fill="#ffffff" opacity="0.08"/>
+
+  <g fill="url(#bar)">
+    <rect x="120" y="232" width="36" height="48"  rx="18"/>
+    <rect x="178" y="200" width="36" height="112" rx="18"/>
+    <rect x="236" y="168" width="36" height="176" rx="18"/>
+    <rect x="294" y="208" width="36" height="96"  rx="18"/>
+    <rect x="352" y="240" width="36" height="32"  rx="16"/>
+  </g>
+
+  <g transform="translate(308 296)">
+    <circle cx="0"  cy="44" r="22" fill="#0a0a0a"/>
+    <circle cx="56" cy="36" r="22" fill="#0a0a0a"/>
+    <rect x="-4" y="-46" width="10" height="92" fill="#0a0a0a"/>
+    <rect x="52" y="-54" width="10" height="92" fill="#0a0a0a"/>
+    <path d="M -4 -46 Q 30 -68 62 -54 L 62 -34 Q 30 -48 -4 -26 Z" fill="#0a0a0a"/>
+  </g>
+</svg>
