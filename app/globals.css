@@ -699,6 +699,13 @@ button:disabled,
  * below the keyboard, so the user can't see what they're tapping. Shrink
  * the stage to ~140px in the Mini App and update the morph math so the
  * loader circle stays centred and round (90px diameter = 140 - 25*2). */
+.tg-app {
+  /* Reserve space below the page's last control (regenerate button) so it
+   * isn't hidden behind the iOS home indicator inside Telegram's Mini App.
+   * The Box already applies pb="9" inline; we ADD the safe-area inset on
+   * top of that via padding-bottom so the gap scales with the device. */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
 .tg-app .mood-input-stage {
   height: 140px;
 }
@@ -1553,7 +1560,10 @@ body:has(.track-info-dialog[data-state="open"]) .equalizer {
       "seek seek volume";
     column-gap: 12px;
     row-gap: 10px;
-    padding: 10px 14px 12px;
+    /* Add safe-area-inset-bottom so the player clears the iOS home
+     * indicator (PWA standalone, Telegram Mini App). Falls back to the
+     * original 12px when the inset is 0 or unsupported. */
+    padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
     align-items: center;
   }
   .now-playing-art {
