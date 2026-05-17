@@ -709,6 +709,18 @@ button:disabled,
 .tg-app .mood-input-stage {
   height: 140px;
 }
+/* Scale the EQ loader down to fit inside the Mini App's smaller (90px)
+ * loader circle — desktop's 100px-tall bars overflow the circle and dwarf
+ * the surrounding chrome at the tighter Mini App size. */
+.tg-app .mood-loader-eq {
+  height: 60px;
+  gap: 5px;
+}
+.tg-app .mood-loader-eq span {
+  width: 6px;
+  height: 16px;
+  border-radius: 3px;
+}
 .tg-app .mood-input-wrap[data-loading="true"] {
   clip-path: inset(25px calc(50% - 45px) round 50%);
 }
