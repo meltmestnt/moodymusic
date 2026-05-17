@@ -214,7 +214,7 @@ function TelegramMiniApp() {
         {!isSignedIn && (
           <Box
             style={{
-              background: "var(--grass-a3)",
+              background: "var(--gray-2)",
               border: "1px solid var(--grass-a6)",
               borderRadius: "var(--radius-3)",
               padding: "var(--space-3)",
