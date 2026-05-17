@@ -2010,12 +2010,16 @@ body:has(.now-playing-bar) .app-main {
  * scroll into view above the bar. Mirrors body:has(.now-playing-bar)
  * .app-main but applies to the modal's scroll container instead. */
 body:has(.now-playing-bar) .track-info-content {
-  padding-bottom: 40px;
+  padding-bottom: 88px;
 }
 
 @media (max-width: 700px) {
+  /* Bar on mobile is ~110px tall (two-row grid with seek slider) plus
+   * env(safe-area-inset-bottom). The +20 gives a small breathing gap so
+   * the last similar-track row sits clear above the bar instead of being
+   * tucked right against it. */
   body:has(.now-playing-bar) .track-info-content {
-    padding-bottom: 180px;
+    padding-bottom: calc(130px + env(safe-area-inset-bottom, 0px));
   }
 }
 

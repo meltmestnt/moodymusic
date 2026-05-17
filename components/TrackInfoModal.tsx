@@ -10,7 +10,6 @@ import {
   Grid,
   Heading,
   IconButton,
-  ScrollArea,
   Text,
   VisuallyHidden,
 } from "@radix-ui/themes";
@@ -240,26 +239,19 @@ export function TrackInfoModal() {
                     <Heading size="4" mb="3">
                       {t("trackInfo.similar")}
                     </Heading>
-                    <ScrollArea
-                      type="hover"
-                      scrollbars="vertical"
-                      style={{ maxHeight: 320 }}
-                    >
-                      <Grid
-                        columns={{ initial: "1", sm: "2" }}
-                        gap="2"
-                        pr="2"
-                      >
-                        {similar.map((s, i) => (
-                          <SimilarTrackRow
-                            key={s.id}
-                            track={s}
-                            player={player}
-                            index={i}
-                          />
-                        ))}
-                      </Grid>
-                    </ScrollArea>
+                    {/* No inner ScrollArea — the similar list flows into the
+                      * modal's own vertical scroll so the user scrolls once,
+                      * not a nested scroll-inside-scroll. */}
+                    <Grid columns={{ initial: "1", sm: "2" }} gap="2">
+                      {similar.map((s, i) => (
+                        <SimilarTrackRow
+                          key={s.id}
+                          track={s}
+                          player={player}
+                          index={i}
+                        />
+                      ))}
+                    </Grid>
                   </Box>
                 )}
               </div>
