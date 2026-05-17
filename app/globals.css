@@ -694,6 +694,18 @@ button:disabled,
   clip-path: inset(44px calc(50% - 66px) round 50%);
 }
 
+/* Telegram Mini App: phones lose half the viewport to the keyboard the
+ * moment the textarea is focused. A 220px stage pushes the submit button
+ * below the keyboard, so the user can't see what they're tapping. Shrink
+ * the stage to ~140px in the Mini App and update the morph math so the
+ * loader circle stays centred and round (90px diameter = 140 - 25*2). */
+.tg-app .mood-input-stage {
+  height: 140px;
+}
+.tg-app .mood-input-wrap[data-loading="true"] {
+  clip-path: inset(25px calc(50% - 45px) round 50%);
+}
+
 .mood-input-wrap[data-loading="true"] .mood-input {
   opacity: 0;
   pointer-events: none;
