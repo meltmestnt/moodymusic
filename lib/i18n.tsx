@@ -350,6 +350,9 @@ const en = {
   "telegram.footerLink": "Telegram bot",
   "telegram.signedOutNotice":
     "Sign in first to link a Telegram account. You can still open the bot as a guest.",
+  // ─── Telegram Mini App (/tg) ──────────────────────────────────────────
+  "tg.guestBanner": "Listening as guest — Spotify Premium unlocks full tracks.",
+  "tg.signIn": "Sign in",
   "nav.menu": "Menu",
   "nav.close": "Close",
 } as const;
@@ -690,6 +693,10 @@ const uk: Dict = {
   "telegram.footerLink": "Telegram-бот",
   "telegram.signedOutNotice":
     "Увійди, щоб звʼязати акаунт із Telegram. Або відкрий бот як гість.",
+  // ─── Telegram Mini App (/tg) ──────────────────────────────────────────
+  "tg.guestBanner":
+    "Слухаєш як гість — Spotify Premium відкриває повні треки.",
+  "tg.signIn": "Увійти",
   "nav.menu": "Меню",
   "nav.close": "Закрити",
 };

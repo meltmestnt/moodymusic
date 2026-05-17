@@ -222,16 +222,14 @@ function TelegramMiniApp() {
             }}
           >
             <Flex direction="column" align="stretch" gap="2">
-              <Text size="2">
-                Listening as guest — Spotify Premium unlocks full tracks.
-              </Text>
+              <Text size="2">{t("tg.guestBanner")}</Text>
               <Button
                 size="2"
                 variant="soft"
                 onClick={onSignIn}
                 style={{ width: "100%" }}
               >
-                Sign in
+                {t("tg.signIn")}
               </Button>
             </Flex>
           </Box>
