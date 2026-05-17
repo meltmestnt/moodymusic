@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,7 +31,18 @@ import {
 // request the same count.
 const MOOD_PICK_COUNT = 12;
 
-export default function MoodPage() {
+export default function MoodPageRoute() {
+  // useSearchParams() forces Next 15 to bail out of static prerender
+  // unless wrapped in Suspense at build time. The page is client-rendered
+  // anyway, so the fallback is never user-visible.
+  return (
+    <Suspense fallback={null}>
+      <MoodPage />
+    </Suspense>
+  );
+}
+
+function MoodPage() {
   const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -34,7 +34,19 @@ import { useTelegramWebApp } from "./telegram";
 // this count after resolution.
 const TG_PICK_COUNT = 12;
 
-export default function TelegramMiniApp() {
+export default function TelegramMiniAppPage() {
+  // useSearchParams() inside the inner component forces Next 15 to bail
+  // out of static prerender unless we hand it a Suspense boundary at
+  // build time. The page is client-rendered anyway, so the fallback is
+  // never user-visible — it only satisfies the build-time contract.
+  return (
+    <Suspense fallback={null}>
+      <TelegramMiniApp />
+    </Suspense>
+  );
+}
+
+function TelegramMiniApp() {
   const tg = useTelegramWebApp();
   const { data: session, status } = useSession();
   const { t, setLocale } = useI18n();

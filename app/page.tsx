@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -42,7 +42,18 @@ import {
 // desktop, six on 2-col mobile.
 const MOOD_PICK_COUNT = 12;
 
-export default function HomePage() {
+export default function HomePageRoute() {
+  // useSearchParams() forces Next 15 to bail out of static prerender
+  // unless wrapped in Suspense at build time. The landing is client-
+  // rendered anyway, so the fallback is never user-visible.
+  return (
+    <Suspense fallback={null}>
+      <HomePage />
+    </Suspense>
+  );
+}
+
+function HomePage() {
   const { status } = useSession();
   const searchParams = useSearchParams();
   const { t } = useI18n();
