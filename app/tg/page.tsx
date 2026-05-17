@@ -215,10 +215,10 @@ function TelegramMiniApp() {
           <Box
             style={{
               background: "var(--gray-2)",
-              border: "1px solid var(--grass-a6)",
+              border: "1px solid var(--gray-6)",
               borderRadius: "var(--radius-3)",
               padding: "var(--space-3)",
-              color: "var(--grass-11)",
+              color: "var(--gray-11)",
             }}
           >
             <Flex direction="column" align="stretch" gap="2">
